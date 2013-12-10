@@ -54,8 +54,8 @@ def get_settings(window=None, create_if_missing=None):
     return settings
 
 
-def get_ssh_listing(address, path, warn=True):
-    command = 'ssh -o StrictHostKeychecking=no "%s" ls -aF "%s"' % (address, path)
+def get_ssh_listing(address, path, port, warn=True):
+    command = 'ssh -o StrictHostKeychecking=no "%s" ls -aF "%s" -p "%s"' % (address, path, port)
     log('Command: \'%s\'' % command)
 
     pipe = subprocess.Popen(
@@ -86,7 +86,7 @@ def get_ssh_listing(address, path, warn=True):
     return {'error': error_message, 'items': items}
 
 
-def scp(from_path, to_path, create_if_missing=False):
+def scp(from_path, to_path, port, create_if_missing=False):
     """
     Call out to the command line scp.
     Note: We don't do any authentication.
@@ -95,7 +95,7 @@ def scp(from_path, to_path, create_if_missing=False):
     IMPORTANT: If you try to write to a file you don't
     have write permissions on you will not get an error!
     """
-    command = 'scp -o StrictHostKeychecking=no "%s" "%s"' % (from_path, to_path)
+    command = 'scp -o StrictHostKeychecking=no -P "%s" "%s" "%s"' % (from_path, to_path, port)
     log('Command: \'%s\'' % command)
 
     pipe = subprocess.Popen(
@@ -184,6 +184,10 @@ class RemoteEditOpenRemoteFilePromptCommand(sublime_plugin.WindowCommand):
         address = self.ssh_config.get('address', self.alias)
         if 'username' in self.ssh_config:
             address = '%s@%s' % (self.ssh_config['username'], address)
+        if 'port' in ssh_config:
+            port = ssh_config['port']
+        else:
+            port = 22
         # TODO: Allow for a starting directory in the settings
         link = False
         if self.path.endswith('@'):
@@ -236,7 +240,10 @@ class RemoteEditOpenRemoteFileCommand(sublime_plugin.WindowCommand):
         scp_path = '%s:%s' % (ssh_config.get('address', alias), real_path)
         if 'username' in ssh_config:
             scp_path = '%s@%s' % (ssh_config['username'], scp_path)
-
+        if 'port' in ssh_config:
+            port = ssh_config['port']
+        else:
+            port = 22
         # Do we already have this remote file open?
         view = temp_path = None
         for cur_view in self.window.views():
@@ -247,7 +254,7 @@ class RemoteEditOpenRemoteFileCommand(sublime_plugin.WindowCommand):
         else:
             temp_path = os.path.join(tempfile.mkdtemp(), os.path.basename(real_path))
 
-            scp(scp_path, temp_path, create_if_missing)
+            scp(scp_path, temp_path, create_if_missing, port)
 
             if not os.path.exists(temp_path):
                 return
@@ -259,6 +266,7 @@ class RemoteEditOpenRemoteFileCommand(sublime_plugin.WindowCommand):
             settings.set('remote_edit_scp_path', scp_path)
             settings.set('remote_edit_temp_path', temp_path)
             settings.set('remote_edit_create_if_missing', create_if_missing)
+            settings.set('remote_edit_port', port)
 
         log('Opened: "%s"' % scp_path)
         log('Temp: "%s"' % temp_path)
